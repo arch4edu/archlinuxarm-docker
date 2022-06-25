@@ -1,0 +1,37 @@
+name: Update
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+jobs:
+
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: petronny/git-config-user@master
+
+      - name: Update
+        run: |
+          set -ex
+
+          curl -L -o new.md5 "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5"
+          cmp --silent ArchLinuxARM-aarch64-latest.tar.gz.md5 new.md5 && exit 0 || echo
+
+          mv new.md5 ArchLinuxARM-aarch64-latest.tar.gz.md5
+          curl -L -o ArchLinuxARM-aarch64-latest.tar.gz "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+          md5sum -c ArchLinuxARM-aarch64-latest.tar.gz.md5
+
+          echo ${{ secrets.DOCKER_TOKEN }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker buildx build --platform linux/arm64 -t arch4edu/archlinuxarm:latest --push .
+
+          git config --global --add safe.directory $(realpath .)
+          git add ArchLinuxARM-aarch64-latest.tar.gz.md5
+          git commit -m "[$(date)] auto update"
+          git push
